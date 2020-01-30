@@ -6,6 +6,7 @@ files_per_course.csv
 [Ll]ib64
 [Ll]ocal
 [Ss]cripts
+tcl
 pyvenv.cfg
 .venv
 pip-selfcheck.json
