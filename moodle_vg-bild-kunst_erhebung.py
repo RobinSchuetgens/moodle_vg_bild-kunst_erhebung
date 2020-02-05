@@ -123,7 +123,12 @@ def get_files(connection, course_ids):
             'filepath': filepath,
             'filename': filename
           }]
-        result[author][course]['files'] = files
+
+        result[author] = {
+          course: {
+            'files': files
+          }
+        }
       else:
         result[author] = {
           course: {
