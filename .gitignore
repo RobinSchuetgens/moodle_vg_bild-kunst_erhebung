@@ -9,4 +9,7 @@ files_per_course.csv
 tcl
 pyvenv.cfg
 .venv
+.env
+export
+origin
 pip-selfcheck.json
