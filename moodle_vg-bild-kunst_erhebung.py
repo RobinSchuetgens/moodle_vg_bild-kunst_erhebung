@@ -109,7 +109,7 @@ def get_files(connection, course_ids):
       course = row['CourseID']
       filename = row['FileName']
       filepath = row['FileSystemPath']
-      print(f"{course}, {filepath}, {author}, {filename}")
+      print("{course}, {filepath}, {author}, {filename}".format(**locals()))
 
       if author in result:
         if course in result[author]:
