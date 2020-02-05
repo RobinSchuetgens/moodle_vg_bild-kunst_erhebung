@@ -75,7 +75,7 @@ SQL_GET_FILES = """SELECT cm.id AS ModuleID, cm.course AS CourseID, cm.module AS
             WHERE (f.id IS NOT NULL AND f.filename <> '.') AND mdl.name IN ('forum', 'book', 'resource', 'url', 'quiz', 'page', 'lesson', 'label', 'wiki') AND cm.course IN ({COURSE_IDS_STR}) ORDER BY CourseID ASC;"""
 
 def get_courses(connection):
-  print('Fetching course ids from database')
+  print('\nFetching course ids from database:')
   global EXCLUDE_CATEGORY_IDS
   course_ids = []
 
@@ -86,11 +86,12 @@ def get_courses(connection):
     result = cursor.fetchall()
     for course in result:
       course_ids.append(course['CourseId'])
+    print('Working on the following course ids: ' + ','.join(map(str, course_ids)))
 
   return course_ids
 
 def get_files(connection, course_ids):
-  print('Fetching files for course ids and getting the corresponding file authors')
+  print('\nFetching files for course ids and getting the corresponding file authors:')
   global COURSE_IDS_STR
   COURSE_IDS_STR = ','.join(map(str, course_ids))
   with connection.cursor() as cursor:
@@ -108,6 +109,7 @@ def get_files(connection, course_ids):
       course = row['CourseID']
       filename = row['FileName']
       filepath = row['FileSystemPath']
+      print(f"{course}, {filepath}, {author}, {filename}")
 
       if author in result:
         if course in result[author]:
@@ -134,19 +136,23 @@ def get_files(connection, course_ids):
   return result
 
 def copy_files(data):
-  print('Copying files from moodle data dir to working directory export')
+  print('\nCopying files from moodle data dir to working directory export:')
   for author, courses in data.items():
     for course, files in data[author].items():
       try:
-        Path("export/" + author + "/" + str(course)).mkdir(parents=True, exist_ok=True)
-        for file in files['files']:
-          filepath = file['filepath']
-          try:
-            copy(filepath, "export/" + author + "/" + str(course) + "/" + file['filename'])
-          except:
-            print('There was an error copying file: ' + filepath)
+        if author != None:
+          print('Creating export directory for ' + str(author))
+          Path("export/" + author + "/" + str(course)).mkdir(parents=True, exist_ok=True)
+          for file in files['files']:
+            filepath = file['filepath']
+            try:
+              dest = "export/" + author + "/" + str(course) + "/" + file['filename']
+              print('Copying: ' + filepath + ' to ' + dest)
+              copy(filepath, dest)
+            except:
+              print('There was an error copying file: ' + filepath + '\n')
       except:
-        print('There was an error creating the export directory for ' + str(author))
+        print('There was an error creating the export directory for ' + str(author) + '\n')
 
 if __name__ == '__main__':
   try:
@@ -157,7 +163,7 @@ if __name__ == '__main__':
                                 charset='utf8mb4',
                                 cursorclass=pymysql.cursors.DictCursor)
   except:
-    print('An error occured while trying to connect to database. Please check credentials.')
+    print('\nAn error occured while trying to connect to database. Please check credentials.\n')
 
   if COURSE_IDS != None:
     COURSE_IDS = get_courses(connection)
