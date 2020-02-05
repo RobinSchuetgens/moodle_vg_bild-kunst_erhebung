@@ -147,7 +147,7 @@ def copy_files(data):
       try:
         if author != None:
           print('Creating export directory for ' + str(author))
-          Path("export/" + author + "/" + str(course)).mkdir(parents=True, exist_ok=True)
+          Path("export/" + author + "/" + str(course)).mkdir(parents=True)
           for file in files['files']:
             filepath = file['filepath']
             try:
