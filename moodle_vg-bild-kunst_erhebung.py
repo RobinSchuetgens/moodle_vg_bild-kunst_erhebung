@@ -75,7 +75,7 @@ SQL_GET_FILES = """SELECT cm.id AS ModuleID, cm.course AS CourseID, cm.module AS
             WHERE (f.id IS NOT NULL AND f.filename <> '.') AND mdl.name IN ('forum', 'book', 'resource', 'url', 'quiz', 'page', 'lesson', 'label', 'wiki') AND cm.course IN ({COURSE_IDS_STR}) ORDER BY CourseID ASC;"""
 
 def get_courses(connection):
-  print('fetching course ids from database')
+  print('Fetching course ids from database')
   global EXCLUDE_CATEGORY_IDS
   course_ids = []
 
@@ -90,7 +90,7 @@ def get_courses(connection):
   return course_ids
 
 def get_files(connection, course_ids):
-  print('fetching files for course ids and getting the corresponding file authors')
+  print('Fetching files for course ids and getting the corresponding file authors')
   global COURSE_IDS_STR
   COURSE_IDS_STR = ','.join(map(str, course_ids))
   with connection.cursor() as cursor:
@@ -134,7 +134,7 @@ def get_files(connection, course_ids):
   return result
 
 def copy_files(data):
-  print('copying files from moodle data dir to working directory')
+  print('Copying files from moodle data dir to working directory export')
   for author, courses in data.items():
     for course, files in data[author].items():
       try:
@@ -144,7 +144,7 @@ def copy_files(data):
           try:
             copy(filepath, "export/" + author + "/" + str(course) + "/" + file['filename'])
           except:
-            print('there was an error copying file: ' + filepath)
+            print('There was an error copying file: ' + filepath)
       except:
         print('There was an error creating the export directory for ' + str(author))
 
