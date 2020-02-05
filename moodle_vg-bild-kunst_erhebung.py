@@ -82,7 +82,6 @@ def get_courses(connection):
   with connection.cursor() as cursor:
     if EXCLUDE_CATEGORY_IDS != None:
       EXCLUDE_CATEGORY_IDS = "''"
-      print(SQL_GET_COURSES.format(**globals()))
     cursor.execute(SQL_GET_COURSES.format(**globals()))
     result = cursor.fetchall()
     for course in result:
