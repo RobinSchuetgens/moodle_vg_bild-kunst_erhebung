@@ -1,6 +1,8 @@
 import os
 import pymysql.cursors
 import random
+import time
+import json
 from pathlib import Path
 from os.path import join, dirname
 from shutil import copy
@@ -34,7 +36,7 @@ SQL_GET_COURSES = """SELECT c.id as CourseId, c.fullname as Coursename, cat.name
                   WHERE c.visible = 1 AND cat.id NOT IN ({EXCLUDE_CATEGORY_IDS})
                   GROUP BY c.id
                   HAVING activeusers > 0;"""
-SQL_GET_FILES = """SELECT cm.id AS ModuleID, cm.course AS CourseID, cm.module AS Module, mdl.name AS ModuleType,
+SQL_GET_FILES = """SELECT cm.id AS ModuleID, cm.course AS CourseID, c.shortname AS CourseName, cm.module AS Module, mdl.name AS ModuleType,
                 CASE
                     WHEN mf.name IS NOT NULL THEN mf.name
                     WHEN mb.name IS NOT NULL THEN mb.name
@@ -58,10 +60,11 @@ SQL_GET_FILES = """SELECT cm.id AS ModuleID, cm.course AS CourseID, cm.module AS
                     WHEN mw.name IS NOT NULL THEN CONCAT('{BASE_URL}/mod/wiki/view.php?id=', cm.id)
                     WHEN mla.name IS NOT NULL THEN CONCAT('{BASE_URL}/mod/label/view.php?id=', cm.id)
                     ELSE NULL
-                END AS Link, f.id AS FileID, f.filepath AS FilePath, f.filename as FileName, CONCAT('{FILE_DIR}/', SUBSTRING(f.contenthash, 1, 2), '/', SUBSTRING(f.contenthash, 3, 2), '/', f.contenthash) AS FileSystemPath, f.userid AS FileUserID, f.filesize as FileSize, f.mimetype as FileMimeType, f.author AS FileAuthor, f.timecreated as TimeCreated, f.timemodified AS TimeModified
+                END AS Link, f.id AS FileID, f.filepath AS FilePath, f.filename as FileName, CONCAT('{FILE_DIR}/', SUBSTRING(f.contenthash, 1, 2), '/', SUBSTRING(f.contenthash, 3, 2), '/', f.contenthash) AS FileSystemPath, f.userid AS FileAuthorID, f.filesize as FileSize, f.mimetype as FileMimeType, f.author AS FileAuthor, f.timecreated as TimeCreated, f.timemodified AS TimeModified
             FROM {DB_PREF}course_modules AS cm
             INNER JOIN {DB_PREF}context AS ctx ON ctx.contextlevel = 70 AND ctx.instanceid = cm.id
             INNER JOIN {DB_PREF}modules AS mdl ON cm.module = mdl.id
+            INNER JOIN {DB_PREF}course AS c ON c.id = cm.course
             LEFT JOIN {DB_PREF}forum AS mf ON mdl.name = 'forum' AND cm.instance = mf.id
             LEFT JOIN {DB_PREF}book AS mb ON mdl.name = 'book' AND cm.instance = mb.id
             LEFT JOIN {DB_PREF}resource AS mr ON mdl.name = 'resource' AND cm.instance = mr.id
@@ -103,63 +106,94 @@ def get_files(connection, course_ids):
       rows = [
           rows[i] for i in sorted(random.sample(range(len(rows)), sample))
       ]
+      print('\nCopying '+ len(rows) + ' files to "export/"')
     result = {}
+    mimetypes = {}
     for row in rows:
+      author_id = row['FileAuthorID']
       author = row['FileAuthor']
       course = row['CourseID']
+      coursename = row['CourseName']
       filename = row['FileName']
       filepath = row['FileSystemPath']
-      print("{course}, {filepath}, {author}, {filename}".format(**locals()))
+      mimetype = row['FileMimeType']
+      link = row['Link']
+      print("{course}, {filepath}, {author_id}, {filename}".format(**locals()))
 
-      if author in result:
-        if course in result[author]:
-          files = result[author][course]['files']
+      if author_id in result:
+        if course in result[author_id]:
+          files = result[author_id][course]['files']
           files.append({
             'filepath': filepath,
-            'filename': filename
+            'filename': filename,
+            'mimetype': mimetype,
+            'link': link
           })
         else:
           files = [{
             'filepath': filepath,
-            'filename': filename
+            'filename': filename,
+            'mimetype': mimetype,
+            'link': link
           }]
-
-        result[author] = {
+        if mimetype in mimetypes:
+          mimetypes[mimetype] += 1
+        else:
+          mimetypes[mimetype] = 1
+        result[author_id] = {
+          'name': author,
           course: {
+            'name': coursename,
             'files': files
           }
         }
       else:
-        result[author] = {
+        result[author_id] = {
+          'name': author,
           course: {
+            'name': coursename,
             'files': [{
               'filepath': filepath,
-              'filename': filename
+              'filename': filename,
+              'mimetype': mimetype,
+              'link': link
             }]
           }
         }
+  statistics = json.dumps(mimetypes, indent=4)
+  file = open("export/statistics.json","w")
+  file.write(statistics)
+  file.close()
   return result
 
 def copy_files(data):
   print('\nCopying files from moodle data dir to working directory export:')
-  for author, courses in data.items():
-    for course, files in data[author].items():
+  for author_id, courses in data.items():
+    for course, files in data[author_id].items():
+      authorname = data[author_id]['name']
       try:
-        if author != None:
-          print('Creating export directory for ' + str(author))
-          Path("export/" + author + "/" + str(course)).mkdir(parents=True)
-          for file in files['files']:
-            filepath = file['filepath']
-            try:
-              dest = "export/" + author + "/" + str(course) + "/" + file['filename']
-              print('Copying: ' + filepath + ' to ' + dest)
-              copy(filepath, dest)
-            except:
-              print('There was an error copying file: ' + filepath + '\n')
+        if authorname == None:
+          authorname = "unknown"
+        print('Creating export directory for ' + str(authorname))
+        Path("export/" + authorname + "/" + str(course)).mkdir(parents=True)
+        for file in files['files']:
+          filepath = file['filepath']
+          try:
+            dest = "export/" + authorname + "/" + str(course) + "/" + file['filename']
+            print('Copying: ' + filepath + ' to ' + dest)
+            copy(filepath, dest)
+            time.sleep(2)
+          except:
+            print('There was an error copying file: ' + filepath + '\n')
       except:
-        print('There was an error creating the export directory for ' + str(author) + '\n')
+        print('There was an error creating the export directory for ' + str(authorname) + '\n')
 
 if __name__ == '__main__':
+  try:
+    Path("export/").mkdir()
+  except:
+    print("There already is a folder called 'export'")
+
   try:
     connection = pymysql.connect(host=DB_HOST,
                                 user=DB_USER,
@@ -175,6 +209,10 @@ if __name__ == '__main__':
 
   filelist = get_files(connection, COURSE_IDS)  
   copy_files(filelist)
+  json_file_data = json.dumps(filelist, indent=4)
+  file = open("export/file_export.json","w")
+  file.write(json_file_data)
+  file.close()
 
   if 'connection' in vars():
     connection.close()
