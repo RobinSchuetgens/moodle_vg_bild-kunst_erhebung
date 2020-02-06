@@ -3,6 +3,7 @@ import pymysql.cursors
 import random
 import time
 import json
+import distutils
 from pathlib import Path
 from os.path import join, dirname
 from shutil import copy
@@ -20,7 +21,7 @@ DB_PREF = os.getenv('DB_PREF')
 BASE_URL = os.getenv('BASE_URL')
 FILE_DIR = os.getenv('FILE_DIR')
 SAMPLE_SIZE = int(os.getenv('SAMPLE_SIZE'))
-RANDOM_SAMPLE = os.getenv('RANDOM_SAMPLE')
+RANDOM_SAMPLE = distutils.util.strtobool(os.getenv('RANDOM_SAMPLE'))
 OUTFILE_PATH = os.getenv('OUTFILE_PATH')
 OUTFILE_NAME = os.getenv('OUTFILE_NAME')
 EXCLUDE_CATEGORY_IDS = os.getenv('EXCLUDE_CATEGORY_IDS') if os.getenv('EXCLUDE_CATEGORY_IDS') != '' else ''
@@ -96,17 +97,18 @@ def get_courses(connection):
 def get_files(connection, course_ids):
   print('\nFetching files for course ids and getting the corresponding file authors:')
   global COURSE_IDS_STR
+  global RANDOM_SAMPLE
   COURSE_IDS_STR = ','.join(map(str, course_ids))
   with connection.cursor() as cursor:
     cursor.execute(SQL_GET_FILES.format(**globals()))
     rows = cursor.fetchall()
     if RANDOM_SAMPLE == True:
       sample = int(round(len(rows) * ( SAMPLE_SIZE / 100 ),0))
-      print(sample)
+      print('\nUsing random sample of size: ' + str(sample))
       rows = [
           rows[i] for i in sorted(random.sample(range(len(rows)), sample))
       ]
-    print('\nCopying '+ len(rows) + ' files to "export/"')
+    print('\nCopying '+ str(len(rows)) + ' files to "export/"')
     result = {}
     mimetypes = {}
     for row in rows:
