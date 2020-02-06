@@ -106,7 +106,7 @@ def get_files(connection, course_ids):
       rows = [
           rows[i] for i in sorted(random.sample(range(len(rows)), sample))
       ]
-      print('\nCopying '+ len(rows) + ' files to "export/"')
+    print('\nCopying '+ len(rows) + ' files to "export/"')
     result = {}
     mimetypes = {}
     for row in rows:
