@@ -1,3 +1,4 @@
+import sys
 import os
 import pymysql.cursors
 import random
@@ -22,6 +23,8 @@ BASE_URL = os.getenv('BASE_URL')
 FILE_DIR = os.getenv('FILE_DIR')
 SAMPLE_SIZE = int(os.getenv('SAMPLE_SIZE'))
 RANDOM_SAMPLE = distutils.util.strtobool(os.getenv('RANDOM_SAMPLE'))
+COPY_FILES = distutils.util.strtobool(os.getenv('COPY_FILES'))
+MAX_FILE_SIZE_IN_MB = int(os.getenv('MAX_FILE_SIZE_IN_MB'))
 OUTFILE_PATH = os.getenv('OUTFILE_PATH')
 OUTFILE_NAME = os.getenv('OUTFILE_NAME')
 EXCLUDE_CATEGORY_IDS = os.getenv('EXCLUDE_CATEGORY_IDS') if os.getenv('EXCLUDE_CATEGORY_IDS') != '' else ''
@@ -169,6 +172,7 @@ def get_files(connection, course_ids):
   return result
 
 def copy_files(data):
+  global MAX_FILE_SIZE_IN_MB
   print('\nCopying files from moodle data dir to working directory export:')
   for author_id, courses in data.items():
     for course, files in data[author_id].items():
@@ -180,13 +184,17 @@ def copy_files(data):
         Path("export/" + authorname + "/" + str(course)).mkdir(parents=True)
         for file in files['files']:
           filepath = file['filepath']
-          try:
-            dest = "export/" + authorname + "/" + str(course) + "/" + file['filename']
-            print('Copying: ' + filepath + ' to ' + dest)
-            copy(filepath, dest)
-            time.sleep(2)
-          except:
-            print('There was an error copying file: ' + filepath + '\n')
+          file_size = os.path.getsize(filepath)
+          if file_size <= MAX_FILE_SIZE_IN_MB:
+            try:
+              dest = "export/" + authorname + "/" + str(course) + "/" + file['filename']
+              print('Copying: ' + filepath + ' to ' + dest)
+              copy(filepath, dest)
+              time.sleep(2)
+            except:
+              print('There was an error copying file: ' + filepath + '\n')
+          else:
+            print('File exceeds max file size of: ' + MAX_FILE_SIZE_IN_MB + 'MB')
       except:
         print('There was an error creating the export directory for ' + str(authorname) + '\n')
 
@@ -209,8 +217,9 @@ if __name__ == '__main__':
   if COURSE_IDS != None:
     COURSE_IDS = get_courses(connection)
 
-  filelist = get_files(connection, COURSE_IDS)  
-  copy_files(filelist)
+  filelist = get_files(connection, COURSE_IDS)
+  if COPY_FILES == True:
+    copy_files(filelist)
   json_file_data = json.dumps(filelist, indent=4)
   file = open("export/file_export.json","w")
   file.write(json_file_data)
