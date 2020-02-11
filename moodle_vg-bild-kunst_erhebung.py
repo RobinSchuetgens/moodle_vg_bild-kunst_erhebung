@@ -173,11 +173,10 @@ def get_files(connection, course_ids):
         stats['mimetypes'][mimetype] = 1
 
       if file_size > int((math.pow(1024, 2) * MAX_FILE_SIZE_IN_MB)):
+        file_dict['file_author'] = author_name
+        file_dict['file_id'] = row['FileID']
         stats['exceeds_file_size_limit_count'] += 1
-        stats['exceeds_file_size_limit'].append({
-          'file_name': file_name,
-          'file_path': file_path
-        })
+        stats['exceeds_file_size_limit'].append(file_dict)
 
   statistics = json.dumps(stats, indent=4)
   file = open("export/statistics.json","w")
