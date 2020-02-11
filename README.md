@@ -1,5 +1,4 @@
 # moodle_vg_bild-kunst_erhebung
-
 This script can be used to get a list of files provided by teachers in moodle courses that meet the following criteria:
 
 course ids:
@@ -73,28 +72,28 @@ WHERE (f.id IS NOT NULL AND f.filename <> '.') AND mdl.name IN ('forum', 'book',
 Corresponding variables ``{VAR}`` will get populated with ``.env`` variables.
 
 ## Copying
-This script gets all files and copies them into the working directory sorted by 
-author and course id.
+This script gets all files (or a specified random sample) and copies them into the working 
+directory sorted by author and course name. The script can select a random sample size 
+as well as a max_file_size that should get copied.
 ```
 ──export
   ├──author name
-  │  ├──id of first course
+  │  ├──course name
   │  │  ├──file 1
   │  │  └──file 2
-  │  └──id of second course
+  │  └──course name
   │     └──file 1
   ├──author name
-  │  └──id of first course
+  │  └──course name
   │     └──file 1
   ...
 ```
 
 ## Statistics
-Moreover this script counts all mime-types and provides a json file that 
-contains these values.
+Moreover this script provides some statistics about mime-types and file, author and course counts.
 
 ## Usage
-This script is used in a python virtualenv. After virtualenv creation all
+This script is used in a python virtualenv. Inside the virtual environment all
 requirements can be installed via ``pip install -r requirements.txt``.
 Afterwards the ``.env-sample`` has to be copied to ``.env`` and at least 
 provide the following environment variables:
@@ -105,8 +104,16 @@ provide the following environment variables:
 - FILE_DIR (This is the corresponding filedir on the server e.g. "/data/moodledata/filedir" without trailing slash)
 Finally run ``python moodle_vg-bild-kunst_erhebung.py``
 
-Be aware that this script requires permissions for the moodle data directory to copy files!
+Optionally you can select a random sample of size x in percent or stop the script from copying any
+files at all.
+- RANDOM_SAMPLE
+- SAMPLE_SIZE
+- COPY_FILES
+- MAX_FILE_SIZE_IN_MB
+
+Be aware that this script requires permissions for the moodle data directory to copy files! Moreover the script
+can potentially slow down server performance dramatically during the copy process.
 
 ## Use at your own risk
 This script is provided without any guarantee to work. It works for me and it's certainly not 
-perfect but it got the job done for me.
+perfect but it got the job done for me. So please use at own risk.
