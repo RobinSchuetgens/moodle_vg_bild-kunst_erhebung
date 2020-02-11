@@ -5,6 +5,8 @@ import random
 import time
 import json
 import distutils
+import math
+import re
 from pathlib import Path
 from os.path import join, dirname
 from shutil import copy
@@ -102,70 +104,82 @@ def get_files(connection, course_ids):
   global COURSE_IDS_STR
   global RANDOM_SAMPLE
   COURSE_IDS_STR = ','.join(map(str, course_ids))
+  result = {}
+  stats = {}
   with connection.cursor() as cursor:
     cursor.execute(SQL_GET_FILES.format(**globals()))
     rows = cursor.fetchall()
+    stats['file_count'] = len(rows)
+    stats['mimetypes'] = {}
+    stats['authors'] = 0
+    stats['courses'] = 0
+    stats['exceeds_file_size_limit_count'] = 0
+    stats['exceeds_file_size_limit'] = []
     if RANDOM_SAMPLE == True:
       sample = int(round(len(rows) * ( SAMPLE_SIZE / 100 ),0))
       print('\nUsing random sample of size: ' + str(sample))
       rows = [
           rows[i] for i in sorted(random.sample(range(len(rows)), sample))
       ]
+      stats['file_count_after_sample'] = len(rows)
     print('\nCopying '+ str(len(rows)) + ' files to "export/"')
-    result = {}
-    mimetypes = {}
     for row in rows:
       author_id = row['FileAuthorID']
-      author = row['FileAuthor']
-      course = row['CourseID']
-      coursename = row['CourseName']
-      filename = row['FileName']
-      filepath = row['FileSystemPath']
+      author_name = slugify_str(row['FileAuthor'])
+      course_id = int(row['CourseID'])
+      course_name = row['CourseName']
+      file_name = row['FileName']
+      file_path = row['FileSystemPath']
+      file_size = row['FileSize']
       mimetype = row['FileMimeType']
       link = row['Link']
-      print("{course}, {filepath}, {author_id}, {filename}".format(**locals()))
+      print("{course_id}, {file_path}, {file_size}, {author_name}, {file_name}".format(**locals()))
 
-      if author_id in result:
-        if course in result[author_id]:
-          files = result[author_id][course]['files']
-          files.append({
-            'filepath': filepath,
-            'filename': filename,
-            'mimetype': mimetype,
-            'link': link
-          })
-        else:
-          files = [{
-            'filepath': filepath,
-            'filename': filename,
-            'mimetype': mimetype,
-            'link': link
-          }]
-        if mimetype in mimetypes:
-          mimetypes[mimetype] += 1
-        else:
-          mimetypes[mimetype] = 1
-        result[author_id] = {
-          'name': author,
-          course: {
-            'name': coursename,
-            'files': files
+      file_dict = {
+        'filepath': file_path,
+        'filesize': file_size,
+        'filename': file_name,
+        'mimetype': mimetype,
+        'link': link
+      }
+
+      if not author_name in result:
+        result[author_name] = {
+          'name' : row['FileAuthor'],
+          'courses': {}
+        }
+        stats['authors'] += 1
+
+      if not course_id in result[author_name]['courses']:
+        result[author_name]['courses'] = {
+          course_id: {
+            'name': course_name,
+            'files': [file_dict]
           }
         }
+        stats['courses'] += 1
       else:
-        result[author_id] = {
-          'name': author,
-          course: {
-            'name': coursename,
-            'files': [{
-              'filepath': filepath,
-              'filename': filename,
-              'mimetype': mimetype,
-              'link': link
-            }]
-          }
+        courses = result[author_name]['courses']
+        files = result[author_name]['courses'][course_id]['files']
+        files.append(file_dict)
+        courses[course_id] = {
+          'name': course_name,
+          'files': files
         }
-  statistics = json.dumps(mimetypes, indent=4)
+
+      if mimetype in stats['mimetypes']:
+        stats['mimetypes'][mimetype] += 1
+      else:
+        stats['mimetypes'][mimetype] = 1
+
+      if file_size > int((math.pow(1024, 2) * MAX_FILE_SIZE_IN_MB)):
+        stats['exceeds_file_size_limit_count'] += 1
+        stats['exceeds_file_size_limit'].append({
+          'file_name': file_name,
+          'file_path': file_path
+        })
+
+  statistics = json.dumps(stats, indent=4)
   file = open("export/statistics.json","w")
   file.write(statistics)
   file.close()
@@ -174,29 +188,32 @@ def get_files(connection, course_ids):
 def copy_files(data):
   global MAX_FILE_SIZE_IN_MB
   print('\nCopying files from moodle data dir to working directory export:')
-  for author_id, courses in data.items():
-    for course, files in data[author_id].items():
-      authorname = data[author_id]['name']
+  for author_key in data:
+    for course_id, course_value in data[author_key]['courses'].items():
+      if author_key == None:
+        author_key = "unknown"
+
       try:
-        if authorname == None:
-          authorname = "unknown"
-        print('Creating export directory for ' + str(authorname))
-        Path("export/" + authorname + "/" + str(course)).mkdir(parents=True)
-        for file in files['files']:
-          filepath = file['filepath']
-          file_size = os.path.getsize(filepath)
-          if file_size <= MAX_FILE_SIZE_IN_MB:
-            try:
-              dest = "export/" + authorname + "/" + str(course) + "/" + file['filename']
-              print('Copying: ' + filepath + ' to ' + dest)
-              copy(filepath, dest)
-              time.sleep(2)
-            except:
-              print('There was an error copying file: ' + filepath + '\n')
-          else:
-            print('File exceeds max file size of: ' + MAX_FILE_SIZE_IN_MB + 'MB')
+        print('Creating export directory for ' + author_key)
+        Path("export/" + author_key + "/" + slugify_str(course_value['name'])).mkdir(parents=True)
       except:
-        print('There was an error creating the export directory for ' + str(authorname) + '\n')
+        print('There was an error creating the export directory for ' + author_key + '.\n')
+
+      for single_file in course_value['files']:
+        filepath = single_file['filepath']
+        if single_file['filesize'] <= int((math.pow(1024, 2) * MAX_FILE_SIZE_IN_MB)) or MAX_FILE_SIZE_IN_MB == 0:
+          try:
+            dest = "export/" + author_key + "/" + slugify_str(course_value['name']) + "/" + single_file['filename']
+            print('Copying: ' + filepath + ' to ' + dest)
+            copy(filepath, dest)
+            time.sleep(2)
+          except:
+            print('There was an error copying file: ' + filepath + '\n')
+        else:
+          print('File "' + single_file['filename'] + '" exceeds max file size of: ' + str(MAX_FILE_SIZE_IN_MB) + 'MB')
+
+def slugify_str(name):
+  return str(re.sub(r"[^a-zA-Z0-9_-]","_", str(name)))
 
 if __name__ == '__main__':
   try:
@@ -218,12 +235,12 @@ if __name__ == '__main__':
     COURSE_IDS = get_courses(connection)
 
   filelist = get_files(connection, COURSE_IDS)
-  if COPY_FILES == True:
-    copy_files(filelist)
   json_file_data = json.dumps(filelist, indent=4)
   file = open("export/file_export.json","w")
   file.write(json_file_data)
   file.close()
+  if COPY_FILES == True:
+    copy_files(filelist)
 
   if 'connection' in vars():
     connection.close()
